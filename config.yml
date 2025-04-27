@@ -1,0 +1,63 @@
+settings:
+  diagnostic_mode: false
+  use_soft_constraints: true
+  log_objective_contributions: true
+
+constraint_toggles:
+  schedule_once: true
+  court_capacity: true
+  adjacent_flights: true
+  team_spacing_hard: true
+  team_spacing_soft: true
+  date_fairness: true
+  segment_fairness: true
+  grouping: true
+  discourage_9pm: true
+  round_grouping: true
+  match_order: true
+
+solver:
+  max_time_seconds: 14400
+  num_search_workers: 4
+  log_search_progress: true
+  random_seed: 42
+  log_every_n: 5   # 👈 Only log every 5th solution
+
+league_dates:
+  55+:
+    start_date: "2025-03-10"
+    end_date: "2025-05-18"
+  40+:
+    start_date: "2025-03-10"
+    end_date: "2025-05-25"
+  18+:
+    start_date: "2025-03-10"
+    end_date: "2025-06-01"
+  Fun:
+    start_date: "2025-03-10"
+    end_date: "2025-06-08"
+
+blackout_dates:
+  - date: "2025-04-20"
+    reason: "Easter"
+  - date: "2025-05-11"
+    reason: "Mother's Day"
+  - date: "2025-05-26"
+    reason: "Memorial Day"
+
+team_spacing:
+  min_hard_days: 4
+  soft_target_days: 6
+  soft_weight: -1
+  reward_threshold_days: 6
+
+soft_constraint_weights:
+  date_fairness: 5
+  segment_fairness: 3
+  date_balance: 5
+  segment_balance: 3
+  discourage_9pm: 15
+  encourage_grouping: 2
+  encourage_round_grouping: 1
+  match_order_penalty: 1
+
