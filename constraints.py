@@ -2,9 +2,7 @@
 
 from ortools.sat.python import cp_model
 
-from main import blackout_dates, match_date_var, valid_dates, min_hard_spacing
 from utils import ConstraintLogger
-
 
 def add_schedule_once_constraints(model, assignments, match_to_valid_courts, matches):
     schedule_once_constraint_count = 0
@@ -14,6 +12,7 @@ def add_schedule_once_constraints(model, assignments, match_to_valid_courts, mat
         schedule_once_constraint_count += 1
         schedule_once_logger.maybe_log(schedule_once_constraint_count)
     schedule_once_logger.log_final(schedule_once_constraint_count)
+    return schedule_once_constraint_count
 
 
 def add_court_capacity_constraints(model, assignments, court_to_valid_matches, courts, matches):
@@ -25,9 +24,10 @@ def add_court_capacity_constraints(model, assignments, court_to_valid_matches, c
         court_capacity_constraint_count += 1
         court_capacity_logger.maybe_log(court_capacity_constraint_count)
     court_capacity_logger.log_final(court_capacity_constraint_count)
+    return court_capacity_constraint_count
 
 
-def add_adjacent_flight_constraints(model, assignments, courts, matches):
+def add_adjacent_flight_constraints(model, assignments, courts, matches, blackout_dates):
     adjacent_flight_constraint_count = 0
     adjacent_flight_logger = ConstraintLogger("Adding Adjacent Flight constraints")
 
@@ -54,9 +54,10 @@ def add_adjacent_flight_constraints(model, assignments, courts, matches):
                         adjacent_flight_constraint_count += 1
                         adjacent_flight_logger.maybe_log(adjacent_flight_constraint_count)
     adjacent_flight_logger.log_final(adjacent_flight_constraint_count)
+    return adjacent_flight_constraint_count
 
 
-def add_team_spacing_hard_constraints(model, team_to_matches):
+def add_team_spacing_hard_constraints(model, team_to_matches, match_date_var, valid_dates, min_hard_spacing):
     spacing_constraint_count = 0
     spacing_constraint_logger = ConstraintLogger("Adding Team Spacing hard constraints")
 
@@ -77,23 +78,24 @@ def add_team_spacing_hard_constraints(model, team_to_matches):
                     spacing_constraint_logger.maybe_log(spacing_constraint_count)
 
     spacing_constraint_logger.log_final(spacing_constraint_count)
+    return spacing_constraint_count
 
-
-def add_hard_constraints(model, assignments, team_to_matches, match_to_valid_courts, court_to_valid_matches, courts, matches, config):
+def add_hard_constraints(model, assignments, constraint_toggles, team_to_matches, match_to_valid_courts, court_to_valid_matches, courts,
+                         matches, blackout_dates, match_date_var, valid_dates, min_hard_spacing):
     """Adds all hard constraints to the model."""
     total_constraints = 0
 
-    if config["constraint_toggles"].get("schedule_once", True):
+    if constraint_toggles.get("schedule_once", True):
         total_constraints += add_schedule_once_constraints(model, assignments, match_to_valid_courts, matches)
 
-    if config["constraint_toggles"].get("court_capacity", True):
+    if constraint_toggles.get("court_capacity", True):
         total_constraints += add_court_capacity_constraints(model, assignments, court_to_valid_matches, courts, matches)
 
-    if config["constraint_toggles"].get("adjacent_flights", True):
-        total_constraints += add_adjacent_flight_constraints(model, assignments, courts, matches, config)
+    if constraint_toggles.get("adjacent_flights", True):
+        total_constraints += add_adjacent_flight_constraints(model, assignments, courts, matches, blackout_dates)
 
-    if config["constraint_toggles"].get("team_spacing_hard", True):
-        total_constraints += add_team_spacing_hard_constraints(model, assignments, team_to_matches, match_to_valid_courts, courts, matches, config)
+    if constraint_toggles.get("team_spacing_hard", True):
+        total_constraints += add_team_spacing_hard_constraints(model, team_to_matches, match_date_var, valid_dates, min_hard_spacing)
 
     return total_constraints
 

@@ -466,7 +466,8 @@ penalty_groups = {
 }
 
 # Build Model
-total_hard = add_hard_constraints(model, assignments, team_to_matches, match_to_valid_courts, courts, matches, config)
+total_hard = add_hard_constraints(model, assignments, constraint_toggles, team_to_matches, match_to_valid_courts,
+                                  court_to_valid_matches, courts, matches, blackout_dates, match_date_var, valid_dates, min_hard_spacing)
 # penalty_groups = add_soft_constraints(model, assignments, team_to_matches, match_to_valid_courts, courts, matches, config, vt)
 
 print(f"🔒 Total hard constraints: {total_hard:,}")
