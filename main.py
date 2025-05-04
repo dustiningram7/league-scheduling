@@ -191,87 +191,87 @@ for m in matches.index:
 # HARD CONSTRAINTS
 # -------------------------------------------------------------
 # Constraint 1: Every match scheduled exactly once
-if is_enabled("schedule_once"):
+#if is_enabled("schedule_once"):
 
-    schedule_once_constraint_count = 0
-    schedule_once_logger = ConstraintLogger("Adding Schedule Once constraints")
-    for m in matches.sort_values("Match #").index:
-        model.Add(sum(assignments[(m, c)] for c in match_to_valid_courts[m]) == 1)
-        schedule_once_constraint_count += 1
-        schedule_once_logger.maybe_log(schedule_once_constraint_count)
-    schedule_once_logger.log_final(schedule_once_constraint_count)
+    # schedule_once_constraint_count = 0
+    # schedule_once_logger = ConstraintLogger("Adding Schedule Once constraints")
+    # for m in matches.sort_values("Match #").index:
+    #     model.Add(sum(assignments[(m, c)] for c in match_to_valid_courts[m]) == 1)
+    #     schedule_once_constraint_count += 1
+    #     schedule_once_logger.maybe_log(schedule_once_constraint_count)
+    # schedule_once_logger.log_final(schedule_once_constraint_count)
 
 
 # Constraint 2: Court capacity
-if is_enabled("court_capacity"):
+#if is_enabled("court_capacity"):
 
-    court_capacity_constraint_count = 0
-    court_capacity_logger = ConstraintLogger("Adding Court Capacity constraints")
-    for c, valid_matches in court_to_valid_matches.items():
-        max_courts = courts.loc[c, "num_courts"]
-        model.Add(sum(assignments[(m, c)] * matches.loc[m, "# of crts"] for m in valid_matches) <= max_courts)
-        court_capacity_constraint_count += 1
-        court_capacity_logger.maybe_log(court_capacity_constraint_count)
-    court_capacity_logger.log_final(court_capacity_constraint_count)
+    # court_capacity_constraint_count = 0
+    # court_capacity_logger = ConstraintLogger("Adding Court Capacity constraints")
+    # for c, valid_matches in court_to_valid_matches.items():
+    #     max_courts = courts.loc[c, "num_courts"]
+    #     model.Add(sum(assignments[(m, c)] * matches.loc[m, "# of crts"] for m in valid_matches) <= max_courts)
+    #     court_capacity_constraint_count += 1
+    #     court_capacity_logger.maybe_log(court_capacity_constraint_count)
+    # court_capacity_logger.log_final(court_capacity_constraint_count)
 
 # Constraint 3: Adjacent flight levels on same day
-if is_enabled("adjacent_flights"):
-    adjacent_flight_constraint_count = 0
-    adjacent_flight_logger = ConstraintLogger("Adding Adjacent Flight constraints")
-
-    for gender in matches["Gender"].unique():
-        for league in matches["League"].unique():
-            league_matches = matches[(matches["Gender"] == gender) & (matches["League"] == league)]
-            for date in courts["Date"].unique():
-                if date in blackout_dates:
-                    continue
-                date_slots = courts[courts["Date"] == date].index
-                for level in league_matches["Flight Level"].unique():
-                    m1 = league_matches[league_matches["Flight Level"] == level]
-                    m2 = league_matches[league_matches["Flight Level"] == level + 0.5]
-                    m3 = league_matches[league_matches["Flight Level"] == level - 0.5]
-                    for group in [(m1, m2), (m1, m3)]:
-                        if not group[0].empty and not group[1].empty:
-                            model.Add(
-                                sum(assignments[(m, c)] for m in group[0].index for c in date_slots if (m, c) in assignments) +
-                                sum(assignments[(m, c)] for m in group[1].index for c in date_slots if (m, c) in assignments)
-                                <= 1
-                            )
-                        adjacent_flight_constraint_count += 1
-                        adjacent_flight_logger.maybe_log(adjacent_flight_constraint_count)
-    adjacent_flight_logger.log_final(adjacent_flight_constraint_count)
+#if is_enabled("adjacent_flights"):
+    # adjacent_flight_constraint_count = 0
+    # adjacent_flight_logger = ConstraintLogger("Adding Adjacent Flight constraints")
+    #
+    # for gender in matches["Gender"].unique():
+    #     for league in matches["League"].unique():
+    #         league_matches = matches[(matches["Gender"] == gender) & (matches["League"] == league)]
+    #         for date in courts["Date"].unique():
+    #             if date in blackout_dates:
+    #                 continue
+    #             date_slots = courts[courts["Date"] == date].index
+    #             for level in league_matches["Flight Level"].unique():
+    #                 m1 = league_matches[league_matches["Flight Level"] == level]
+    #                 m2 = league_matches[league_matches["Flight Level"] == level + 0.5]
+    #                 m3 = league_matches[league_matches["Flight Level"] == level - 0.5]
+    #                 for group in [(m1, m2), (m1, m3)]:
+    #                     if not group[0].empty and not group[1].empty:
+    #                         model.Add(
+    #                             sum(assignments[(m, c)] for m in group[0].index for c in date_slots if (m, c) in assignments) +
+    #                             sum(assignments[(m, c)] for m in group[1].index for c in date_slots if (m, c) in assignments)
+    #                             <= 1
+    #                         )
+    #                     adjacent_flight_constraint_count += 1
+    #                     adjacent_flight_logger.maybe_log(adjacent_flight_constraint_count)
+    # adjacent_flight_logger.log_final(adjacent_flight_constraint_count)
 
 # Constraint 4: Team spacing
-if is_enabled("team_spacing_hard"):
-    spacing_constraint_count = 0
-    spacing_constraint_logger = ConstraintLogger("Adding Team Spacing hard constraints")
+# if is_enabled("team_spacing_hard"):
+#     spacing_constraint_count = 0
+#     spacing_constraint_logger = ConstraintLogger("Adding Team Spacing hard constraints")
+#
+#     for team_key, team_matches in team_to_matches.items():
+#         team_matches = list(team_matches)
+#
+#         for i in range(len(team_matches)):
+#             for j in range(i + 1, len(team_matches)):
+#                 m1 = team_matches[i]
+#                 m2 = team_matches[j]
+#
+#                 if m1 in match_date_var and m2 in match_date_var:
+#                     diff = model.NewIntVar(0, len(valid_dates), f"spacing_diff_{m1}_{m2}")
+#                     model.AddAbsEquality(diff, match_date_var[m1] - match_date_var[m2])
+#                     model.Add(diff >= min_hard_spacing)
+#
+#                     spacing_constraint_count += 1
+#                     spacing_constraint_logger.maybe_log(spacing_constraint_count)
+#
+#     spacing_constraint_logger.log_final(spacing_constraint_count)
 
-    for team_key, team_matches in team_to_matches.items():
-        team_matches = list(team_matches)
-
-        for i in range(len(team_matches)):
-            for j in range(i + 1, len(team_matches)):
-                m1 = team_matches[i]
-                m2 = team_matches[j]
-
-                if m1 in match_date_var and m2 in match_date_var:
-                    diff = model.NewIntVar(0, len(valid_dates), f"spacing_diff_{m1}_{m2}")
-                    model.AddAbsEquality(diff, match_date_var[m1] - match_date_var[m2])
-                    model.Add(diff >= min_hard_spacing)
-
-                    spacing_constraint_count += 1
-                    spacing_constraint_logger.maybe_log(spacing_constraint_count)
-
-    spacing_constraint_logger.log_final(spacing_constraint_count)
-
-print(f"✅ Elapsed: {elapsed_time(start_time)} - Hard constraints added.")
-total_hard_constraints = (
-    schedule_once_constraint_count +
-    court_capacity_constraint_count +
-    adjacent_flight_constraint_count +
-    spacing_constraint_count
-)
-print(f"🔒 Total enforced hard constraints: {total_hard_constraints:,}")
+# print(f"✅ Elapsed: {elapsed_time(start_time)} - Hard constraints added.")
+# total_hard_constraints = (
+#     schedule_once_constraint_count +
+#     court_capacity_constraint_count +
+#     adjacent_flight_constraint_count +
+#     spacing_constraint_count
+# )
+# print(f"🔒 Total enforced hard constraints: {total_hard_constraints:,}")
 
 # -------------------------------------------------------------
 # SOFT CONSTRAINTS
@@ -450,8 +450,8 @@ total_soft_constraints = (
         match_order_constraint_count +
         reward_constraint_count
 )
-total_constraints = total_hard_constraints + total_soft_constraints
-print(f"🔒 Total enforced hard and soft constraints: {total_constraints:,}")
+# total_constraints = total_hard_constraints + total_soft_constraints
+# print(f"🔒 Total enforced hard and soft constraints: {total_constraints:,}")
 
 penalty_groups = {
     "date_fairness": date_penalties,
@@ -465,8 +465,13 @@ penalty_groups = {
     "team_spacing_rewards": team_spacing_rewards,
 }
 
-build_objective(model, soft_weights, penalty_groups, log=settings.get("log_objective_contributions", False))
+# Build Model
+total_hard = add_hard_constraints(model, assignments, constraint_toggles, team_to_matches, match_to_valid_courts,
+                                  court_to_valid_matches, courts, matches, blackout_dates, match_date_var, valid_dates, min_hard_spacing)
+# penalty_groups = add_soft_constraints(model, assignments, team_to_matches, match_to_valid_courts, courts, matches, config, vt)
 
+print(f"🔒 Total hard constraints: {total_hard:,}")
+build_objective(model, soft_weights, penalty_groups, log=settings.get("log_objective_contributions", False))
 
 # -------------------------------------------------------------
 # SOLVE + POST-CHECK
