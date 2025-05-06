@@ -5,16 +5,27 @@ settings:
 
 constraint_toggles:
   schedule_once: true
+    # Each match must be assigned to exactly one court-time slot.
   court_capacity: true
+    # Total courts used at any facility-time slot cannot exceed the number available.
   adjacent_flights: true
+    # Prevents two adjacent flight levels within the same gender and league from playing on the same day.
   team_spacing_hard: true
+    # No team may play two matches closer than a minimum number of days apart. Enforced across all team match combinations.
   team_spacing_soft: true
-  date_fairness: true
+    # Rewards teams whose minimum spacing between consecutive matches meets or exceeds a preferred target.
+  date_fairness: false
+    # Encourages even distribution of matches across available dates. Penalties apply if dates are over- or under-used.
   segment_fairness: true
+    # Encourages balanced match distribution across Morning, Afternoon, and Evening segments.
   grouping: true
+    # Incentivizes matches from the same league/flight level to be scheduled together in the same time segment.
   discourage_9pm: true
+    # Adds a penalty for matches scheduled at 9PM or later.
   round_grouping: true
+    # Encourages all matches from a given round to be played on the same date.
   match_order: true
+    # Discourages scheduling higher Match #s before lower ones within the same league and flight level.
 
 solver:
   max_time_seconds: 14400
@@ -66,12 +77,11 @@ team_spacing:
   reward_threshold_days: 6
 
 soft_constraint_weights:
-  date_fairness: 5
-  segment_fairness: 3
-  date_balance: 5
-  segment_balance: 3
-  discourage_9pm: 15
-  encourage_grouping: 2
+  date_fairness: 2
+  segment_fairness: 2
+  date_balance: 2
+  segment_balance: 1
+  discourage_9pm: 5
+  encourage_grouping: 1
   encourage_round_grouping: 1
-  match_order_penalty: 1
-
+  match_order_penalty: 2

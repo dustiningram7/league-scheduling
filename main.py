@@ -512,7 +512,7 @@ soft_weights_named = {
     "nine_pm_penalties": soft_weights["discourage_9pm"],
     "team_spacing_rewards": spacing_soft_weight,
     "round_grouping_penalties": soft_weights.get("encourage_round_grouping", 1),
-    "match_order_penalties": soft_weights.get("match_order_penalties", 1)
+    "match_order_penalties": soft_weights.get("match_order_penalty", 1)
 }
 
 # Run with callback
