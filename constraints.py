@@ -1,9 +1,8 @@
 # constraints.py
 
 from ortools.sat.python import cp_model
-
+import builtins
 from utils import ConstraintLogger, is_enabled, get_weight
-
 
 def add_schedule_once_constraints(model, assignments, match_to_valid_courts, matches):
     schedule_once_constraint_count = 0
@@ -132,10 +131,7 @@ def add_segment_fairness_penalties(model, assignments, courts, court_to_valid_ma
     min_matches_per_segment = vt.new_int_var(0, len(matches), "min_matches_per_segment", group="segment fairness")
     for segment in ["Morning", "Afternoon", "Evening"]:
         seg_slots = courts[courts["time_segment"] == segment].index
-        scheduled = sum(
-            sum(assignments[(m, c)] for m in court_to_valid_matches[c] if (m, c) in assignments)
-            for c in seg_slots
-        )
+        scheduled = sum(assignments[(m, c)] for c in seg_slots for m in court_to_valid_matches[c] if (m, c) in assignments)
         over = vt.new_int_var(0, len(matches), f"over_{segment}", group="segment fairness")
         under = vt.new_int_var(0, len(matches), f"under_{segment}", group="segment fairness")
         model.Add(scheduled <= max_matches_per_segment + over)
@@ -262,16 +258,15 @@ def add_team_spacing_rewards(model, team_to_matches, constraint_config, match_da
     reward_constraint_logger.log_final(reward_constraint_count)
     return team_spacing_rewards
 
-def add_soft_constraints(model, assignments, team_to_matches, match_to_valid_courts, court_to_valid_matches, courts,
+def add_soft_constraints(model, assignments, team_to_matches, courts, court_to_valid_matches,
                          matches, constraint_config, vt, blackout_dates, flight_groups, match_date_var, valid_dates):
     """Adds all soft constraints and returns penalty groups for the objective."""
     penalty_groups = {}
-
     if is_enabled(constraint_config,"date_fairness"):
         penalty_groups["date_fairness"] = add_date_fairness_penalties(model, assignments, court_to_valid_matches, matches, vt, blackout_dates)
 
     if is_enabled(constraint_config,"segment_fairness"):
-        penalty_groups["segment_fairness"] = add_segment_fairness_penalties(model, assignments, court_to_valid_matches, courts, matches, vt)
+        penalty_groups["segment_fairness"] = add_segment_fairness_penalties(model, assignments, courts, court_to_valid_matches, matches, vt)
 
     if is_enabled(constraint_config,"grouping"):
         penalty_groups["grouping"] = add_grouping_penalties(model, assignments, courts, blackout_dates, flight_groups)

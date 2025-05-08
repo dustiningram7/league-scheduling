@@ -18,7 +18,6 @@ from utils import (
     print_9pm_summary,
     parse_time,
     format_duration as fmt,
-    ConstraintLogger,
     summarize_schedule_by_team,
     is_enabled, get_weight
 )
@@ -184,7 +183,7 @@ for m in matches.index:
 # -------------------------------------------------------------
 total_hard = add_hard_constraints(model, assignments, constraint_config, team_to_matches, match_to_valid_courts,
                                   court_to_valid_matches, courts, matches, blackout_dates, match_date_var, valid_dates)
-penalty_groups = add_soft_constraints(model, assignments, team_to_matches, match_to_valid_courts, court_to_valid_matches, courts,
+penalty_groups = add_soft_constraints(model, assignments, team_to_matches, courts, court_to_valid_matches,
                                       matches, constraint_config, vt, blackout_dates, flight_groups, match_date_var, valid_dates)
 
 print(f"🔒 Total hard constraints: {total_hard:,}")
