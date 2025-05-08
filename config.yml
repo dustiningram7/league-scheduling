@@ -3,29 +3,39 @@ settings:
   use_soft_constraints: true
   log_objective_contributions: true
 
-constraint_toggles:
-  schedule_once: true
-    # Each match must be assigned to exactly one court-time slot.
-  court_capacity: true
-    # Total courts used at any facility-time slot cannot exceed the number available.
-  adjacent_flights: true
-    # Prevents two adjacent flight levels within the same gender and league from playing on the same day.
-  team_spacing_hard: true
-    # No team may play two matches closer than a minimum number of days apart. Enforced across all team match combinations.
-  team_spacing_soft: true
-    # Rewards teams whose minimum spacing between consecutive matches meets or exceeds a preferred target.
-  date_fairness: false
-    # Encourages even distribution of matches across available dates. Penalties apply if dates are over- or under-used.
-  segment_fairness: true
-    # Encourages balanced match distribution across Morning, Afternoon, and Evening segments.
-  grouping: true
-    # Incentivizes matches from the same league/flight level to be scheduled together in the same time segment.
-  discourage_9pm: true
-    # Adds a penalty for matches scheduled at 9PM or later.
-  round_grouping: true
-    # Encourages all matches from a given round to be played on the same date.
-  match_order: true
-    # Discourages scheduling higher Match #s before lower ones within the same league and flight level.
+constraints:
+  # hard constraints
+  schedule_once: # Each match must be assigned to exactly one court-time slot.
+    enabled: true
+  court_capacity: # Total courts used at any facility-time slot cannot exceed the number available.
+    enabled: true
+  adjacent_flights: # Prevents two adjacent flight levels within the same gender and league from playing on the same day.
+    enabled: true
+  team_spacing_hard: # No team may play two matches closer than a minimum number of days apart. Enforced across all team match combinations.
+    enabled: true
+    min_hard_spacing: 4
+  # soft constraints
+  team_spacing_target: # Rewards teams whose minimum spacing between consecutive matches meets or exceeds a preferred target.
+    enabled: true
+    weight: 6
+  date_fairness: # Encourages even distribution of matches across available dates. Penalties apply if dates are over- or under-used.
+    enabled: false
+    weight: 2
+  segment_fairness: # Encourages balanced match distribution across Morning, Afternoon, and Evening segments.
+    enabled: true
+    weight: 1
+  grouping: # Incentivizes matches from the same league/flight level to be scheduled together in the same time segment.
+    enabled: true
+    weight: 1
+  discourage_9pm: # Adds a penalty for matches scheduled at 9PM or later.
+    enabled: true
+    weight: 5
+  round_grouping: # Encourages all matches from a given round to be played on the same date.
+    enabled: true
+    weight: 1
+  match_order: # Discourages scheduling higher Match #s before lower ones within the same league and flight level.
+    enabled: true
+    weight: 3
 
 solver:
   max_time_seconds: 14400
@@ -69,19 +79,3 @@ blackout_dates:
     reason: "40+ Tournament"
   - date: "2025-06-08"
     reason: "40+ Tournament"
-
-team_spacing:
-  min_hard_days: 4
-  soft_target_days: 6
-  soft_weight: -1
-  reward_threshold_days: 6
-
-soft_constraint_weights:
-  date_fairness: 2
-  segment_fairness: 2
-  date_balance: 2
-  segment_balance: 1
-  discourage_9pm: 5
-  encourage_grouping: 1
-  encourage_round_grouping: 1
-  match_order_penalty: 2

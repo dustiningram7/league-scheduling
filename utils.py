@@ -147,6 +147,12 @@ def summarize_schedule_by_team(matches: pd.DataFrame) -> pd.DataFrame:
 
     return summary
 
+def is_enabled(config: dict, name: str) -> bool:
+    return config.get(name, {}).get("enabled", False)
+
+def get_weight(config: dict, name: str, default: int = 1) -> int:
+    return config.get(name, {}).get("weight", default)
+
 
 class ConstraintLogger:
     def __init__(self, name, interval_seconds=300, step_interval=500_000):

@@ -1,15 +1,8 @@
 # objective_builder.py
+from utils import get_weight
 
-def build_objective(model, soft_weights, penalty_groups, log=False):
-    """
-    Add a Minimize objective to the model based on weighted penalty groups.
+def build_objective(model, constraint_config, penalty_groups, log=False):
 
-    Args:
-        model (cp_model.CpModel): OR-Tools model.
-        soft_weights (dict): {group_name: weight}.
-        penalty_groups (dict): {group_name: list of variables}.
-        log (bool): Print each group's contribution if True.
-    """
     total_expr = 0
     log_lines = []
 
@@ -17,7 +10,7 @@ def build_objective(model, soft_weights, penalty_groups, log=False):
         if not group_vars:
             continue
 
-        weight = soft_weights.get(name, 1)
+        weight = get_weight(constraint_config, name, default = 1)
         group_sum = sum(group_vars)
         weighted_expr = group_sum * weight
         total_expr += weighted_expr

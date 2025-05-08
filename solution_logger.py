@@ -23,8 +23,8 @@ class HybridLogger(cp_model.CpSolverSolutionCallback):
         print(f"\n✅ [{int(elapsed // 60)}m {int(elapsed % 60)}s] Solution #{self.solution_count}")
 
         total_obj = 0
-        for name, vars in self.var_groups.items():
-            value = sum(self.Value(v) for v in vars)
+        for name, soft_vars in self.var_groups.items():
+            value = sum(self.Value(v) for v in soft_vars)
             weight = self.weights.get(name, 1)
             score = value * weight
             total_obj += score
