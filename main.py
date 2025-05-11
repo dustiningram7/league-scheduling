@@ -61,10 +61,21 @@ USE_SOFT_CONSTRAINTS = settings.get("use_soft_constraints", True)
 # -------------------------------------------------------------
 # LOAD & FORMAT DATA
 # -------------------------------------------------------------
+
 matches = pd.read_csv("data/matches.csv", skiprows=2)
 matches["Flight #"] = matches["Flight #"].astype(str)
 matches["Gender"] = matches["Flight #"].apply(lambda x: x.split(" ")[0])
 matches["Flight Level"] = matches["Flight #"].apply(lambda x: float(x.split(" ")[1]))
+
+"""
+# Filter matches to a small test league or a few teams
+sample_league = "18+"  # or "40+"
+matches = matches[matches["League"] == sample_league].copy()
+
+# Optional: reduce number of flights or teams
+teams = matches["Home Team"].unique()[:3]  # pick 3 teams
+matches = matches[matches["Home Team"].isin(teams) | matches["Visiting Team"].isin(teams)].copy()
+"""
 
 courts = pd.read_csv("data/court_availability.csv", parse_dates=["start_time", "end_time"])
 courts.dropna(how='all', axis=1, inplace=True)
@@ -130,7 +141,6 @@ assignments = {}
 match_to_valid_courts = defaultdict(list)
 court_to_valid_matches = defaultdict(list)
 match_to_valid_dates = defaultdict(set)
-nine_pm_penalties = []
 
 for m in matches.sort_values(["Rnd","Match #"]).index:
     league = matches.loc[m, "League"]
@@ -145,8 +155,6 @@ for m in matches.sort_values(["Rnd","Match #"]).index:
             match_to_valid_courts[m].append(c)
             court_to_valid_matches[c].append(m)
             match_to_valid_dates[m].add(court_date)
-            if courts.loc[c, "is_9pm"] and is_enabled(constraint_config, "discourage_9pm"):
-                nine_pm_penalties.append(var)
 
 print(f"📌 Total assignment variables: {len(assignments)}")
 
@@ -183,8 +191,8 @@ for m in matches.index:
 # -------------------------------------------------------------
 total_hard = add_hard_constraints(model, assignments, constraint_config, team_to_matches, match_to_valid_courts,
                                   court_to_valid_matches, courts, matches, blackout_dates, match_date_var, valid_dates)
-penalty_groups = add_soft_constraints(model, assignments, team_to_matches, courts, court_to_valid_matches,
-                                      matches, constraint_config, vt, blackout_dates, flight_groups, match_date_var, valid_dates)
+penalty_groups = add_soft_constraints(model, assignments, courts, team_to_matches, court_to_valid_matches,
+                                      matches, constraint_config, vt, blackout_dates, flight_groups, match_date_var, valid_dates, league_dates)
 
 print(f"🔒 Total hard constraints: {total_hard:,}")
 build_objective(model, constraint_config, penalty_groups, log=settings.get("log_objective_contributions", False))
@@ -215,7 +223,7 @@ soft_weights = {
     "date_penalties": get_weight(constraint_config, "date_fairness"),
     "segment_penalties": get_weight(constraint_config, "segment_fairness"),
     "grouping_penalties": get_weight(constraint_config, "grouping"),
-    "nine_pm_penalties": nine_pm_penalties,
+    "discourage_9pm": get_weight(constraint_config, "discourage_9pm"),
     "team_spacing_rewards": get_weight(constraint_config, "team_spacing_target"),
     "round_grouping_penalties": get_weight(constraint_config, "round_grouping"),
     "match_order_penalties": get_weight(constraint_config, "match_order")
@@ -296,6 +304,26 @@ print(f"🚨 Found {violations:,} violation(s) < {min_hard_spacing} day spacing"
 matches.drop(columns=["Gender", "Flight Level"], inplace=True)
 summary = summarize_schedule_by_team(matches)
 
+# 🗂 Sort scheduled matches within each (League, Flight #) by date and time
+matches["Scheduled Order"] = None  # new column
+
+# First ensure Time is parsed properly for sorting
+matches["Parsed Time"] = pd.to_datetime(matches["Time"], format="%I:%M %p", errors="coerce")
+
+# Sort within each league & flight
+grouped = matches.groupby(["League", "Flight #"])
+
+for (league, flight), group in grouped:
+    sorted_group = group.sort_values(by=["Date", "Parsed Time", "Match #"])
+    for i, idx in enumerate(sorted_group.index, start=1):
+        matches.at[idx, "Scheduled Order"] = i
+
+# Drop helper column
+matches.drop(columns=["Parsed Time"], inplace=True)
+
+# -------------------------------------------------------------
+# ✅ EXPORT
+# -------------------------------------------------------------
 output_file = "matches_scheduled.xlsx"
 with pd.ExcelWriter(output_file, engine="xlsxwriter") as writer:
     matches.to_excel(writer, sheet_name="Schedule", index=False)

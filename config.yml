@@ -17,16 +17,17 @@ constraints:
   # soft constraints
   team_spacing_target: # Rewards teams whose minimum spacing between consecutive matches meets or exceeds a preferred target.
     enabled: true
-    weight: 6
+    weight: 3
+    target: 6
   date_fairness: # Encourages even distribution of matches across available dates. Penalties apply if dates are over- or under-used.
-    enabled: false
-    weight: 2
+    enabled: true
+    weight: 1
   segment_fairness: # Encourages balanced match distribution across Morning, Afternoon, and Evening segments.
     enabled: true
     weight: 1
   grouping: # Incentivizes matches from the same league/flight level to be scheduled together in the same time segment.
     enabled: true
-    weight: 1
+    weight: 2
   discourage_9pm: # Adds a penalty for matches scheduled at 9PM or later.
     enabled: true
     weight: 5
@@ -34,7 +35,7 @@ constraints:
     enabled: true
     weight: 1
   match_order: # Discourages scheduling higher Match #s before lower ones within the same league and flight level.
-    enabled: true
+    enabled: false
     weight: 3
 
 solver:

@@ -100,27 +100,54 @@ def add_hard_constraints(model, assignments, constraint_config, team_to_matches,
 
     return total_constraints
 
+def add_team_date_fairness_penalties(model, team_to_matches, match_date_var, matches, league_dates, vt):
+    penalties = []
+    logger = ConstraintLogger("Adding Team Date Spread penalties")
+    count = 0
 
-def add_date_fairness_penalties(model, assignments, courts, court_to_valid_matches, matches, vt, blackout_dates):
-    date_penalties = []
-    date_fairness_constraint_count = 0
-    date_fairness_logger = ConstraintLogger("Adding Date Fairness constraints")
-    max_matches_per_date = vt.new_int_var(0, len(matches), "max_matches_per_date", group="date fairness")
-    min_matches_per_date = vt.new_int_var(0, len(matches), "min_matches_per_date", group="date fairness")
-    for date in courts["Date"].unique():
-        if date in blackout_dates:
+    for team_key, match_ids in team_to_matches.items():
+        match_ids = [m for m in match_ids if m in match_date_var]
+        if len(match_ids) < 2:
             continue
-        slots = courts[courts["Date"] == date].index
-        scheduled = sum(assignments[(m, c)] for c in slots for m in court_to_valid_matches[c] if (m, c) in assignments)
-        over = vt.new_int_var(0, len(matches), f"over_{date}", group="date fairness")
-        under = vt.new_int_var(0, len(matches), f"under_{date}", group="date fairness")
-        model.Add(scheduled <= max_matches_per_date + over)
-        model.Add(scheduled >= min_matches_per_date - under)
-        date_penalties += [over, under]
-        date_fairness_constraint_count += 1
-        date_fairness_logger.maybe_log(date_fairness_constraint_count)
-    date_fairness_logger.log_final(date_fairness_constraint_count)
-    return date_penalties
+
+        league = team_key.split("::")[0]
+        league_range = league_dates.get(league)
+        if not league_range:
+            continue
+
+        # Approximate league duration in "date index" space
+        league_start = league_range["start_date"]
+        league_end = league_range["end_date"]
+        league_days = (league_end - league_start).days
+        if league_days < 1:
+            continue
+
+        # Use Min/Max scheduled dates
+        date_vars = [match_date_var[m] for m in match_ids]
+        team_min = model.NewIntVar(0, 1000, f"{team_key}_min_date")
+        team_max = model.NewIntVar(0, 1000, f"{team_key}_max_date")
+        model.AddMinEquality(team_min, date_vars)
+        model.AddMaxEquality(team_max, date_vars)
+
+        # Spread = range of match dates
+        spread = model.NewIntVar(0, 1000, f"{team_key}_spread")
+        model.Add(spread == team_max - team_min)
+
+        # Ideal = evenly spaced matches (very rough approx)
+        max_possible_spread = min(league_days, len(date_vars) * 7)  # generous upper bound
+        ideal = vt.new_int_var(0, 1000, f"{team_key}_ideal_spread")
+        model.Add(ideal == max_possible_spread)
+
+        penalty = model.NewIntVar(0, 1000, f"{team_key}_spread_penalty")
+        model.Add(penalty == ideal - spread)
+        penalties.append(penalty)
+
+        count += 1
+        logger.maybe_log(count)
+
+    logger.log_final(count)
+    return penalties
+
 
 
 def add_segment_fairness_penalties(model, assignments, courts, court_to_valid_matches, matches, vt):
@@ -153,20 +180,25 @@ def add_grouping_penalties(model, assignments, courts, blackout_dates, flight_gr
         for date in courts["Date"].unique():
             if date in blackout_dates:
                 continue
-            for segment in ["Morning", "Afternoon", "Evening"]:
-                segment_slots = courts[(courts["Date"] == date) & (courts["time_segment"] == segment)].index
-                scheduled = [
-                    assignments[(m, c)]
-                    for m in match_ids
-                    for c in segment_slots
-                    if (m, c) in assignments
-                ]
-                if scheduled:
-                    used = model.NewBoolVar(f"group_{key}_{date}_{segment}")
-                    model.AddMaxEquality(used, scheduled)
-                    grouping_penalties.append(used)
-                grouping_constraint_count += 1
-                grouping_logger.maybe_log(grouping_constraint_count)
+            for facility in courts["Facility"].unique():
+                for segment in ["Morning", "Afternoon", "Evening"]:
+                    segment_slots = courts[
+                        (courts["Date"] == date) &
+                        (courts["time_segment"] == segment) &
+                        (courts["Facility"] == facility)
+                        ].index
+                    scheduled = [
+                        assignments[(m, c)]
+                        for m in match_ids
+                        for c in segment_slots
+                        if (m, c) in assignments
+                    ]
+                    if scheduled:
+                        used = model.NewBoolVar(f"group_{key}_{date}_{segment}_{facility}")
+                        model.AddMaxEquality(used, scheduled)
+                        grouping_penalties.append(used)
+                    grouping_constraint_count += 1
+                    grouping_logger.maybe_log(grouping_constraint_count)
     grouping_logger.log_final(grouping_constraint_count)
     return grouping_penalties
 
@@ -233,7 +265,7 @@ def add_team_spacing_rewards(model, team_to_matches, constraint_config, match_da
     reward_constraint_count = 0
     team_spacing_rewards = []
     reward_constraint_logger = ConstraintLogger("Adding team spacing rewards")
-    team_spacing_target = get_weight(constraint_config, "team_spacing_target")  # from config
+    team_spacing_target = constraint_config["team_spacing_target"]["target"]
 
     for team_key, team_matches in team_to_matches.items():
         team_matches = list(team_matches)
@@ -248,9 +280,13 @@ def add_team_spacing_rewards(model, team_to_matches, constraint_config, match_da
                     spacing_ok = model.NewBoolVar(f"spacing_reward_{m1}_{m2}")
                     diff = model.NewIntVar(0, len(valid_dates), f"spacing_diff_{m1}_{m2}")
                     model.AddAbsEquality(diff, match_date_var[m1] - match_date_var[m2])
-                    model.Add(diff >= team_spacing_target).OnlyEnforceIf(spacing_ok)
-                    model.Add(diff < team_spacing_target).OnlyEnforceIf(spacing_ok.Not())
-                    team_spacing_rewards.append(spacing_ok)
+                    # model.Add(diff >= team_spacing_target).OnlyEnforceIf(spacing_ok)
+                    # model.Add(diff < team_spacing_target).OnlyEnforceIf(spacing_ok.Not())
+                    # team_spacing_rewards.append(spacing_ok)
+                    penalty_var = model.NewBoolVar(f"spacing_penalty_{m1}_{m2}")
+                    model.Add(diff < team_spacing_target).OnlyEnforceIf(penalty_var)
+                    model.Add(diff >= team_spacing_target).OnlyEnforceIf(penalty_var.Not())
+                    team_spacing_rewards.append(penalty_var)
 
                     reward_constraint_count += 1
                     reward_constraint_logger.maybe_log(reward_constraint_count)
@@ -258,15 +294,63 @@ def add_team_spacing_rewards(model, team_to_matches, constraint_config, match_da
     reward_constraint_logger.log_final(reward_constraint_count)
     return team_spacing_rewards
 
-def add_soft_constraints(model, assignments, team_to_matches, courts, court_to_valid_matches,
-                         matches, constraint_config, vt, blackout_dates, flight_groups, match_date_var, valid_dates):
+"""
+✅ Elapsed: 4h 0m 1s - Finished solving
+Solver status: FEASIBLE
+Objective value: 64.0
+Solver wall time: 14401.10 sec
+
+🔍 Elapsed: 4h 0m 1s - Validating scheduled results...
+✅ All 12 matches have scheduled dates.
+✅ Elapsed: 4h 0m 1s - Checked 84 match pairs
+🚨 Found 0 violation(s) < 4 day spacing
+📄 Schedule + summary saved to matches_scheduled.xlsx
+
+📋 Scheduling Summary
+
+🏟️ Matches by Facility:
+- BRC: 8 match(es) (66.7%)
+- LTC: 4 match(es) (33.3%)
+
+🕘 Time Summary:
+- 9PM matches:     12 (100.0%)
+- Other matches:   0 (0.0%)
+✅ Elapsed: 4h 0m 2s - Schedule saved to matches_scheduled.xlsx
+
+📊 Timing Summary
+⏰ Start time:      2025-05-09 08:38:31 PM
+🧠 Model building:  0s
+🧮 Solver time:     4h 0m 1s
+🧾 Total runtime:   4h 0m 2s
+✅ Finished at:     2025-05-10 12:38:34 AM
+
+Process finished with exit code 0
+
+"""
+
+def add_nine_pm_penalties(assignments, courts, matches):
+    penalties = []
+    for (m, c), var in assignments.items():
+        if courts.loc[c, "is_9pm"]:
+            penalties.append(var)
+    return penalties
+
+
+def add_soft_constraints(model, assignments, courts, team_to_matches, court_to_valid_matches,
+                         matches, constraint_config, vt, blackout_dates, flight_groups, match_date_var, valid_dates, league_dates):
     """Adds all soft constraints and returns penalty groups for the objective."""
     penalty_groups = {}
     if is_enabled(constraint_config,"date_fairness"):
-        penalty_groups["date_fairness"] = add_date_fairness_penalties(model, assignments, court_to_valid_matches, matches, vt, blackout_dates)
+        penalty_groups["date_fairness"] = add_team_date_fairness_penalties(model, team_to_matches, match_date_var, matches, league_dates, vt)
 
     if is_enabled(constraint_config,"segment_fairness"):
-        penalty_groups["segment_fairness"] = add_segment_fairness_penalties(model, assignments, courts, court_to_valid_matches, matches, vt)
+        penalty_groups["segment_fairness"] = add_segment_fairness_penalties(
+            model = model,
+            assignments = assignments,
+            courts = courts,
+            court_to_valid_matches = court_to_valid_matches,
+            matches = matches,
+            vt = vt)
 
     if is_enabled(constraint_config,"grouping"):
         penalty_groups["grouping"] = add_grouping_penalties(model, assignments, courts, blackout_dates, flight_groups)
@@ -279,5 +363,8 @@ def add_soft_constraints(model, assignments, team_to_matches, courts, court_to_v
 
     if is_enabled(constraint_config,"team_spacing_target"):
         penalty_groups["team_spacing_rewards"] = add_team_spacing_rewards(model, team_to_matches, constraint_config, match_date_var, valid_dates)
+
+    if is_enabled(constraint_config, "discourage_9pm"):
+        penalty_groups["discourage_9pm"] = add_nine_pm_penalties(assignments, courts, matches)
 
     return penalty_groups
