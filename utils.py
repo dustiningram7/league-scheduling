@@ -153,6 +153,41 @@ def is_enabled(config: dict, name: str) -> bool:
 def get_weight(config: dict, name: str, default: int = 1) -> int:
     return config.get(name, {}).get("weight", default)
 
+def resequence_match_numbers(scheduled_matches, matches_df, output_file="matches_scheduled_ordered.xlsx"):
+    """
+    Reorder scheduled matches based on scheduled date, time, and court,
+    and assign new sequential match numbers.
+
+    Args:
+        scheduled_matches (list of dict): Scheduled matches with date and time.
+        matches_df (pd.DataFrame): Original matches DataFrame.
+        output_file (str): Path to save the ordered schedule.
+
+    Returns:
+        pd.DataFrame: Updated DataFrame with new match numbers.
+    """
+    # Sort scheduled matches by date, start_time, and court_id
+    scheduled_sorted = sorted(
+        scheduled_matches,
+        key=lambda x: (x["date"], x["start_time"], x["court_id"])
+    )
+
+    # Assign new sequential numbers
+    for idx, match in enumerate(scheduled_sorted, start=1):
+        match["new_match_number"] = idx
+
+    # Build mapping: original Match # ➜ new_match_number
+    new_number_map = {m["match_id"]: m["new_match_number"] for m in scheduled_sorted}
+
+    # Apply to DataFrame
+    matches_df["New Match #"] = matches_df["Match #"].map(new_number_map)
+
+    # Sort and export
+    ordered_df = matches_df.sort_values("New Match #")
+    ordered_df.to_excel(output_file, index=False)
+
+    print(f"📄 Ordered schedule saved to {output_file}")
+    return ordered_df
 
 class ConstraintLogger:
     def __init__(self, name, interval_seconds=300, step_interval=500_000):

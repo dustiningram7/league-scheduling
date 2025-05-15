@@ -14,16 +14,18 @@ constraints:
   team_spacing_hard: # No team may play two matches closer than a minimum number of days apart. Enforced across all team match combinations.
     enabled: true
     min_hard_spacing: 4
+  round_order: # Enforce sequential play within league and flight.
+    enabled: true
   # soft constraints
   team_spacing_target: # Rewards teams whose minimum spacing between consecutive matches meets or exceeds a preferred target.
     enabled: true
     weight: 3
-    target: 6
+    target: 8
   date_fairness: # Encourages even distribution of matches across available dates. Penalties apply if dates are over- or under-used.
     enabled: true
-    weight: 1
+    weight: .75
   segment_fairness: # Encourages balanced match distribution across Morning, Afternoon, and Evening segments.
-    enabled: true
+    enabled: false
     weight: 1
   grouping: # Incentivizes matches from the same league/flight level to be scheduled together in the same time segment.
     enabled: true
@@ -33,13 +35,13 @@ constraints:
     weight: 5
   round_grouping: # Encourages all matches from a given round to be played on the same date.
     enabled: true
-    weight: 1
+    weight: 1.25
   match_order: # Discourages scheduling higher Match #s before lower ones within the same league and flight level.
     enabled: false
     weight: 3
 
 solver:
-  max_time_seconds: 14400
+  max_time_seconds: 3600
   num_search_workers: 4
   log_search_progress: true
   random_seed: 42

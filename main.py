@@ -5,6 +5,7 @@ import time
 from datetime import datetime, time as dtime
 from collections import defaultdict
 from termcolor import colored
+import matplotlib.pyplot as plt
 import os
 import yaml
 from solution_logger import HybridLogger
@@ -66,6 +67,7 @@ matches = pd.read_csv("data/matches.csv", skiprows=2)
 matches["Flight #"] = matches["Flight #"].astype(str)
 matches["Gender"] = matches["Flight #"].apply(lambda x: x.split(" ")[0])
 matches["Flight Level"] = matches["Flight #"].apply(lambda x: float(x.split(" ")[1]))
+matches["Original Match #"] = matches["Match #"]
 
 """
 # Filter matches to a small test league or a few teams
@@ -191,7 +193,7 @@ for m in matches.index:
 # -------------------------------------------------------------
 total_hard = add_hard_constraints(model, assignments, constraint_config, team_to_matches, match_to_valid_courts,
                                   court_to_valid_matches, courts, matches, blackout_dates, match_date_var, valid_dates)
-penalty_groups = add_soft_constraints(model, assignments, courts, team_to_matches, court_to_valid_matches,
+penalty_groups, soft_weights = add_soft_constraints(model, assignments, courts, team_to_matches, court_to_valid_matches,
                                       matches, constraint_config, vt, blackout_dates, flight_groups, match_date_var, valid_dates, league_dates)
 
 print(f"🔒 Total hard constraints: {total_hard:,}")
@@ -217,17 +219,6 @@ if "random_seed" in solver_config:
 print(f"⏳ Elapsed: {elapsed_time(start_time)} - Starting solver")
 modeling_end = time.time()
 solver_start = time.time()
-
-# Build dictionary of soft constraints and their weights
-soft_weights = {
-    "date_penalties": get_weight(constraint_config, "date_fairness"),
-    "segment_penalties": get_weight(constraint_config, "segment_fairness"),
-    "grouping_penalties": get_weight(constraint_config, "grouping"),
-    "discourage_9pm": get_weight(constraint_config, "discourage_9pm"),
-    "team_spacing_rewards": get_weight(constraint_config, "team_spacing_target"),
-    "round_grouping_penalties": get_weight(constraint_config, "round_grouping"),
-    "match_order_penalties": get_weight(constraint_config, "match_order")
-}
 
 # Run with callback
 log_every_n = solver_config.get("log_every_n", 1)  # fallback to every solution if not specified
@@ -258,6 +249,17 @@ for (m, c), var in assignments.items():
             "date": courts.loc[c, "Date"],
             "start_time": courts.loc[c]["start_time"].strftime('%I:%M %p') if pd.notna(courts.loc[c]["start_time"]) else "TBD"
         })
+
+# Plot after solving completes
+if solution_logger.objective_progress:
+    plt.plot(solution_logger.objective_progress, marker="o")
+    plt.title("Objective Value Progression")
+    plt.xlabel("Logged Solutions")
+    plt.ylabel("Objective Value")
+    plt.grid(True)
+    plt.show()
+else:
+    print("No solutions were recorded for plotting.")
 
 # -------------------------------------------------------------
 # 🧪 POST-SOLVER CHECK: Team Spacing Violations
@@ -301,25 +303,30 @@ match_to_date = dict(zip(matches["Match #"], matches["Date"]))
 print(f"✅ Elapsed: {elapsed_time(start_time)} - Checked {checked_pairs:,} match pairs")
 print(f"🚨 Found {violations:,} violation(s) < {min_hard_spacing} day spacing")
 
-matches.drop(columns=["Gender", "Flight Level"], inplace=True)
+# Group by League and Flight # and sort within each group
+group_keys = ["League", "Flight #"]
+sorted_matches = []
+
+for _, group in matches.groupby(group_keys, sort=False):
+    # Sort the group as desired (e.g., by Rnd, Date, Time)
+    group_sorted = group.sort_values(["Rnd", "Date", "Time"], ignore_index=True)
+
+    # Reattach the original Match # in original sequence within the group
+    group_sorted["Match #"] = group["Original Match #"].values
+
+    sorted_matches.append(group_sorted)
+
+# Concatenate all groups back together
+matches = pd.concat(sorted_matches, ignore_index=True)
+
+# Drop unused columns after sorting
+matches.drop(columns=["Gender", "Flight Level", "Original Match #"], inplace=True)
+
+# Generate the team summary
 summary = summarize_schedule_by_team(matches)
 
-# 🗂 Sort scheduled matches within each (League, Flight #) by date and time
-matches["Scheduled Order"] = None  # new column
+solution_logger.export_objective_plot("objective_progress.png")
 
-# First ensure Time is parsed properly for sorting
-matches["Parsed Time"] = pd.to_datetime(matches["Time"], format="%I:%M %p", errors="coerce")
-
-# Sort within each league & flight
-grouped = matches.groupby(["League", "Flight #"])
-
-for (league, flight), group in grouped:
-    sorted_group = group.sort_values(by=["Date", "Parsed Time", "Match #"])
-    for i, idx in enumerate(sorted_group.index, start=1):
-        matches.at[idx, "Scheduled Order"] = i
-
-# Drop helper column
-matches.drop(columns=["Parsed Time"], inplace=True)
 
 # -------------------------------------------------------------
 # ✅ EXPORT

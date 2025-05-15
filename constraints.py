@@ -81,6 +81,31 @@ def add_team_spacing_hard_constraints(model, team_to_matches, match_date_var, va
     spacing_constraint_logger.log_final(spacing_constraint_count)
     return spacing_constraint_count
 
+
+def add_round_order_constraints(model, matches, match_date_var):
+    constraint_count = 0
+    round_order_logger = ConstraintLogger("Adding Round Order hard constraints")
+
+    for (league, flight), group in matches.groupby(["League", "Flight Level"]):
+        rounds = sorted(group["Rnd"].dropna().unique())
+        for i in range(len(rounds) - 1):
+            earlier_round = rounds[i]
+            later_round = rounds[i + 1]
+
+            earlier_matches = group[group["Rnd"] == earlier_round].index
+            later_matches = group[group["Rnd"] == later_round].index
+
+            for m1 in earlier_matches:
+                for m2 in later_matches:
+                    if m1 in match_date_var and m2 in match_date_var:
+                        model.Add(match_date_var[m1] <= match_date_var[m2])
+                        constraint_count += 1
+                        round_order_logger.maybe_log(constraint_count)
+
+    round_order_logger.log_final(constraint_count)
+    return constraint_count
+
+
 def add_hard_constraints(model, assignments, constraint_config, team_to_matches, match_to_valid_courts, court_to_valid_matches, courts,
                          matches, blackout_dates, match_date_var, valid_dates):
     """Adds all hard constraints to the model."""
@@ -97,6 +122,9 @@ def add_hard_constraints(model, assignments, constraint_config, team_to_matches,
 
     if is_enabled(constraint_config,"team_spacing_hard"):
         total_constraints += add_team_spacing_hard_constraints(model, team_to_matches, match_date_var, valid_dates, constraint_config)
+        
+    if is_enabled(constraint_config,"round_order"):
+        total_constraints += add_round_order_constraints(model, matches, match_date_var)
 
     return total_constraints
 
@@ -340,8 +368,10 @@ def add_soft_constraints(model, assignments, courts, team_to_matches, court_to_v
                          matches, constraint_config, vt, blackout_dates, flight_groups, match_date_var, valid_dates, league_dates):
     """Adds all soft constraints and returns penalty groups for the objective."""
     penalty_groups = {}
+    soft_weights = {}
     if is_enabled(constraint_config,"date_fairness"):
         penalty_groups["date_fairness"] = add_team_date_fairness_penalties(model, team_to_matches, match_date_var, matches, league_dates, vt)
+        soft_weights["date_fairness"] = get_weight(constraint_config, "date_fairness")
 
     if is_enabled(constraint_config,"segment_fairness"):
         penalty_groups["segment_fairness"] = add_segment_fairness_penalties(
@@ -351,20 +381,26 @@ def add_soft_constraints(model, assignments, courts, team_to_matches, court_to_v
             court_to_valid_matches = court_to_valid_matches,
             matches = matches,
             vt = vt)
+        soft_weights["segment_fairness"] = get_weight(constraint_config, "segment_fairness")
 
     if is_enabled(constraint_config,"grouping"):
         penalty_groups["grouping"] = add_grouping_penalties(model, assignments, courts, blackout_dates, flight_groups)
+        soft_weights["grouping"] = get_weight(constraint_config, "grouping")
 
     if is_enabled(constraint_config,"round_grouping"):
-        penalty_groups["encourage_round_grouping"] = add_round_grouping_penalties(model, assignments, courts, matches)
+        penalty_groups["round_grouping"] = add_round_grouping_penalties(model, assignments, courts, matches)
+        soft_weights["round_grouping"] = get_weight(constraint_config, "round_grouping")
 
     if is_enabled(constraint_config,"match_order"):
         penalty_groups["match_order"] = add_match_order_penalties(model, matches, match_date_var)
+        soft_weights["match_order"] = get_weight(constraint_config, "match_order")
 
     if is_enabled(constraint_config,"team_spacing_target"):
-        penalty_groups["team_spacing_rewards"] = add_team_spacing_rewards(model, team_to_matches, constraint_config, match_date_var, valid_dates)
+        penalty_groups["team_spacing_target"] = add_team_spacing_rewards(model, team_to_matches, constraint_config, match_date_var, valid_dates)
+        soft_weights["team_spacing_target"] = get_weight(constraint_config, "team_spacing_target")
 
     if is_enabled(constraint_config, "discourage_9pm"):
         penalty_groups["discourage_9pm"] = add_nine_pm_penalties(assignments, courts, matches)
+        soft_weights["discourage_9pm"] = get_weight(constraint_config, "discourage_9pm")
 
-    return penalty_groups
+    return penalty_groups, soft_weights
